@@ -47,10 +47,6 @@ deal perPlayer playerDecks drawPile =
                     ( p, d )
 
                 ( _, nextCard :: draw ) ->
-                    let
-                        dummy3 = Debug.log "step" nextCard
-                        dummy4 = Debug.log "step" playerIndex
-                    in
                     impl
                         (remaining - 1)
                         (remainderBy numPlayers (playerIndex + 1))

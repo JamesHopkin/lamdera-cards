@@ -78,8 +78,6 @@ update msg model =
                         numPlayers = List.length players
 
                         ( playerDecks, drawPile ) = Cards.deal 5 (Array.repeat numPlayers []) deck
-                        dummy = Debug.log "deck"
-                            <| Array.get 0 playerDecks
                         decks = Array.push drawPile playerDecks
 
                         -- will filter all decks in a generic way. for now just use index
