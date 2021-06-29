@@ -11,11 +11,11 @@ import Url
 import Display
 
 
---import Canvas
-
 type alias Model =
     FrontendModel
 
+
+-- https://cards.lamdera.app
 
 app =
     Lamdera.frontend
@@ -30,13 +30,15 @@ app =
 
 
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
-init _ _ =
+init url _ =
     ( { gameState = NotStarted
       , deck = []
+      , selected = -1
       , debugInfo =
         { clientId = "unset!"
         , numGamesCreatedAtConnectionTime = 0
         }
+      , isAdmin = url |> Url.toString |> String.contains "admin"
       }
     , Cmd.none
     )
@@ -45,6 +47,9 @@ init _ _ =
 update : FrontendMsg -> Model -> ( Model, Cmd FrontendMsg )
 update msg model = 
     case msg of
+
+        Click index ->
+            ( { model | selected = index }, Cmd.none )
 
         Noop ->
             ( model, Cmd.none )
@@ -64,25 +69,29 @@ view model =
     let
       stateString = case model.gameState of
         NotStarted -> "NotStarted"
-        InProgress -> "InProgress"
+        MyTurn -> "MyTurn"
+        OtherTurn -> "OtherTurn"
         Won -> "Won"
         Lost -> "Lost"
     in
     { title = ""
-    , body =
-        [ Display.drawCards model.deck
-        , Html.div [ Attr.style "text-align" "center", Attr.style "padding-top" "40px" ]
-            (
-              [ Html.text (stateString ++ ", ")
-              , Html.div [] [Html.text <| model.debugInfo.clientId ++ ", " ++
-                (String.fromInt <| List.length model.deck)  ++ ", " ++
-                (String.fromInt model.debugInfo.numGamesCreatedAtConnectionTime)
-                ]
-              , Html.div [] [Html.text
-                  <| String.join " : "
-                  <| List.map (\(s, n) -> String.fromInt s ++ ", " ++ String.fromInt n) model.deck
-                ]
-              ]
-            )
-        ]
+    , body = 
+        if model.isAdmin then
+            [ Html.text "admin!" ]
+        else
+            [ Display.drawCards model.deck model.selected Click
+            , Html.div [ Attr.style "text-align" "center", Attr.style "padding-top" "40px" ]
+                (
+                  [ Html.text (stateString ++ ", ")
+                  , Html.div [] [Html.text <| model.debugInfo.clientId ++ ", " ++
+                    (String.fromInt <| List.length model.deck)  ++ ", " ++
+                    (String.fromInt model.debugInfo.numGamesCreatedAtConnectionTime)
+                    ]
+                  , Html.div [] [Html.text
+                      <| String.join " : "
+                      <| List.map (\(s, n) -> String.fromInt s ++ ", " ++ String.fromInt n) model.deck
+                    ]
+                  ]
+                )
+            ]
     }

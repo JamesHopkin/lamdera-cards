@@ -7,7 +7,10 @@ import Lamdera exposing (ClientId)
 import Url exposing (Url)
 import Cards
 
-type FrontendGameState = NotStarted | InProgress | Won | Lost
+import Bezique
+import TwoOhFourEight
+
+type FrontendGameState = NotStarted | MyTurn | OtherTurn | Won | Lost
 
 -- will split this into constant on connect and updateable 
 type alias DebugInfo =
@@ -18,17 +21,10 @@ type alias DebugInfo =
 type alias FrontendModel =
     { gameState : FrontendGameState
     , deck : Cards.Deck
+    , selected : Int
     , debugInfo : DebugInfo
+    , isAdmin : Bool
     }
-
-{--
-
-random cards plumbing
-
-what do I do with a random response?
-    need to work out what bits I can keep in Cards and what has to bubble up
-
---}
 
 
 
@@ -37,7 +33,7 @@ type alias PlayerId = ClientId
 
 -- next, try giving each player some cards (array of decks, with deck[num players] and draw pile for now?)
 type Game =
-    WipGame (List PlayerId) (Array Cards.Deck)
+    WipGame (List PlayerId) (Array Cards.Deck) Int
 
 type alias BackendModel =
     { waitingPlayers : List PlayerId
@@ -59,6 +55,7 @@ type BackendMsg
 
 type FrontendMsg
     = Noop
+    | Click Int
 
 type ToBackend
     = NoOpToBackend

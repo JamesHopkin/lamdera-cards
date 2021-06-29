@@ -1,8 +1,10 @@
 module Display exposing (drawCards)
 
+
 import Html.Styled exposing (..) 
 --import Html.Attributes exposing (..) 
 import Html.Styled.Attributes exposing (css, src)
+import Html.Styled.Events exposing (..) 
 
 import Css exposing (..)
 import Css.Transitions exposing (..)
@@ -37,31 +39,60 @@ getRank n =
 cardsRoot = "https://tekeye.uk/playing_cards/images/svg_playing_cards/"
 
 --drawCards : Deck -> Html msg
-drawCards cards =  
+drawCards cards selected clickMsg =  
     let
-        addCard x y angle card = 
-            div [ css 
-                    [ position absolute
-                    , Css.left (px x)
-                    , Css.top (px y)
-                    , Css.transform (rotate (deg angle))
-                    , Css.hover
-                        [ Css.top <| px <| y - 20
-                        ]
-                    , transition
-                        [ Css.Transitions.top 200
-                        ]
-                    ]
+        commonCss x y angle =
+            [ position absolute
+            , Css.left (px x)
+            , Css.top (px y)
+            , Css.transform (rotate (deg angle))
+            ]
+
+        additionalUnselected y =
+            [ Css.hover
+                [ Css.top (px (y - 20))
                 ]
-                [ img [src (cardsRoot ++ "fronts/" ++ card ++ ".svg")] []
+            , transition
+                [ Css.Transitions.top 200
                 ]
+            ]
+
         indexer index ( s, n ) =
             let
                 factor = toFloat index
+                x = 50 + factor * 15
+                ybase = 60 + factor * 10
+                angle = factor * 10 - 15
+                card = getSuit s ++ getRank (n + 2)
+
+                y = if index == selected then
+                        ybase
+
+                    else
+                        ybase + 40
+
+                withCss = commonCss x y angle ++ (
+                    if index == selected then
+                        []
+
+                    else
+                        additionalUnselected y
+                    )
             in
-            addCard
-                (50 + factor * 15)
-                (60 + factor * 10)
-                (factor * 10 - 15) (getSuit s ++ getRank (n + 2))
+            div [ css withCss
+                , onClick (clickMsg index)
+                ]
+                [ img [src (cardsRoot ++ "fronts/" ++ card ++ ".svg")] []
+                ]
     in
-    toUnstyled <| div [css [position relative]] <| List.indexedMap indexer cards
+    toUnstyled
+        <| div
+            [ css [position relative]
+            , css [Css.backgroundColor (rgb 0 192 0)]
+            ]
+        <| (::) (div [ css
+            [ position absolute
+            , Css.width (px 640), Css.height (px 640)
+            , Css.backgroundColor (rgb 0 160 0)
+            ]] [])
+        <| List.indexedMap indexer cards

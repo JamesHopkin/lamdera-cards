@@ -9,9 +9,16 @@ import Types exposing (..)
 import Cards exposing (getShuffledPack)
 
 
+cardsPerPlayer = 7
+playersPerGame = 2
+
 type alias Model =
     BackendModel
 
+{--
+copy minimal amount of code per game for init/update and presumably
+some messaging
+--}
 
 app =
     Lamdera.backend
@@ -29,7 +36,7 @@ init =
     )
 
 gameBroadcast : Game -> ToFrontend -> List (Cmd BackendMsg)
-gameBroadcast (WipGame players _) payload =
+gameBroadcast (WipGame players _ _) payload =
     List.map (\p -> Lamdera.sendToFrontend p payload) players
 
 
@@ -47,10 +54,9 @@ update msg model =
 
             in
 
-            -- 1 means 2 players per game
-            if List.length model.waitingPlayers == 1 then
+            if List.length model.waitingPlayers == playersPerGame - 1 then
                 let
-                    newGame = WipGame queue Array.empty
+                    newGame = WipGame queue Array.empty 0
                     games = Array.push newGame model.games
 
                     deckRequest = Random.generate (GameDeck <| Array.length model.games) getShuffledPack
@@ -73,21 +79,23 @@ update msg model =
         
         GameDeck id deck ->
             case getGame id model of
-                Just ((WipGame players _) as game) ->
+                Just ((WipGame players _ _) as game) ->
                     let
                         numPlayers = List.length players
 
-                        ( playerDecks, drawPile ) = Cards.deal 5 (Array.repeat numPlayers []) deck
+                        ( playerDecks, drawPile ) = Cards.deal cardsPerPlayer (Array.repeat numPlayers []) deck
+                        dummy = Debug.log "deck"
+                            <| Array.get 0 playerDecks
                         decks = Array.push drawPile playerDecks
 
                         -- will filter all decks in a generic way. for now just use index
                         blah: Int -> Cards.Deck -> Cmd BackendMsg
                         blah index playerDeck = Lamdera.sendToFrontend
                             (Maybe.withDefault "!" <| List.head (List.drop index players))
-                            (OnGameStateChanged InProgress playerDeck)
+                            (OnGameStateChanged (if index == 0 then MyTurn else OtherTurn) playerDeck)
                     in
                     ( { model
-                      | games = updateGame id (WipGame players decks) model
+                      | games = updateGame id (WipGame players decks 0) model
                       }
                     , Cmd.batch
                         <| Array.toList
