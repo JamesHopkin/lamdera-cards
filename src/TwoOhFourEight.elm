@@ -1,4 +1,4 @@
-module TwoOhFourEight exposing (..)
+module TwoOhFourEight exposing (BackendModel)
 
 import Browser
 import Browser.Events as Events
@@ -19,6 +19,8 @@ import List.Extra as List
 import Json.Decode as Decode
 
 import Random
+
+type alias BackendModel = ()
 
 keyDecoder : Decode.Decoder String
 keyDecoder =
@@ -218,10 +220,7 @@ decoder msg attrName event =
     Json.map2 Tuple.pair
         (Json.field "clientX" Json.float)
         (Json.field "clientY" Json.float)
-        |>  (let
-                dummy = Debug.log "decoder" event
-            in
-            Json.at [attrName, "0"])
+        |>  Json.at [attrName, "0"]
         |>  Json.map (\attr -> ( msg attr, False ))
         |>  preventDefaultOn event
 

@@ -1,19 +1,22 @@
 module Backend exposing (..)
 
 import Array exposing (Array)
+import Dict
 import Html
 import Lamdera
 import Random
-import Types exposing (..)
 
+import Bezique
 import Cards exposing (getShuffledPack)
+import Game
+import Types
 
 
 cardsPerPlayer = 7
 playersPerGame = 2
 
 type alias Model =
-    BackendModel
+    Types.BackendModel
 
 {--
 copy minimal amount of code per game for init/update and presumably
@@ -28,95 +31,80 @@ app =
         , subscriptions = subscriptions
         }
 
-
-init : ( Model, Cmd BackendMsg )
-init =
-    ( { waitingPlayers = [], games = Array.empty }
-    , Cmd.none
+init : ( Model, Cmd Types.BackendMsg )
+init = 
+    (   { state = Nothing, other = "not initialised" }
+    ,   Random.generate Types.InitialSeed Random.independentSeed
     )
 
-gameBroadcast : Game -> ToFrontend -> List (Cmd BackendMsg)
-gameBroadcast (WipGame players _ _) payload =
-    List.map (\p -> Lamdera.sendToFrontend p payload) players
-
-
-update : BackendMsg -> Model -> ( Model, Cmd BackendMsg )
+update : Types.BackendMsg -> Model -> ( Model, Cmd Types.BackendMsg )
 update msg model =
     case msg of
-        OnConnection player ->
-            let
+        Types.GameBackend gameMessage ->
+            Types.backendUpdate gameMessage model
 
-                queue = player :: model.waitingPlayers
+        Types.AdminBackend ->
+            ( model, Cmd.none )
 
-                sendDebugInfo games = 
-                    Lamdera.sendToFrontend player <| InitDebugInfo
-                        <| DebugInfo ("id: " ++ player) (Array.length games)
-
-            in
-
-            if List.length model.waitingPlayers == playersPerGame - 1 then
-                let
-                    newGame = WipGame queue Array.empty 0
-                    games = Array.push newGame model.games
-
-                    deckRequest = Random.generate (GameDeck <| Array.length model.games) getShuffledPack
-                in
-                ( { model
-                  | waitingPlayers = []
-                  , games = games
-                  }
-
-                , Cmd.batch [ deckRequest, sendDebugInfo games ]
-                ) 
-
-            else
-                ( { model
-                  | waitingPlayers = queue
-                  }
-                , sendDebugInfo model.games
-                )
-
-        
-        GameDeck id deck ->
-            case getGame id model of
-                Just ((WipGame players _ _) as game) ->
+        Types.OnConnection player ->
+            case model.state of
+                Just ({games} as state) ->
                     let
-                        numPlayers = List.length players
-
-                        ( playerDecks, drawPile ) = Cards.deal cardsPerPlayer (Array.repeat numPlayers []) deck
-                        dummy = Debug.log "deck"
-                            <| Array.get 0 playerDecks
-                        decks = Array.push drawPile playerDecks
-
-                        -- will filter all decks in a generic way. for now just use index
-                        blah: Int -> Cards.Deck -> Cmd BackendMsg
-                        blah index playerDeck = Lamdera.sendToFrontend
-                            (Maybe.withDefault "!" <| List.head (List.drop index players))
-                            (OnGameStateChanged (if index == 0 then MyTurn else OtherTurn) playerDeck)
+                        sendFunc playerId message =
+                            message
+                                |> Types.BeziqueToFrontend
+                                |> Types.GameToFrontend
+                                |> Lamdera.sendToFrontend playerId
+                    -- automatically queue for Bezique for now
+                        ( bezique, cmd ) = Bezique.requestGame
+                            (Types.BeziqueBackend >> Types.GameBackend)
+                            sendFunc
+                            player games.bezique
                     in
-                    ( { model
-                      | games = updateGame id (WipGame players decks 0) model
-                      }
-                    , Cmd.batch
-                        <| Array.toList
-                        <| Array.indexedMap blah playerDecks
--- indexedMap : (Int -> a -> b) -> Array a -> Array b
-
-
-
+                    (   {   model
+                        |   state = Just
+                            {   state
+                            |   games =
+                                {   games
+                                |   bezique = bezique
+                                }
+                            }
+                        }
+                    ,   Cmd.batch
+                            [   cmd
+                            ,   Lamdera.sendToFrontend player
+                                    <| Types.InitDebugInfo
+                                    <| Game.DebugInfo ("id: " ++ player) (Dict.size games.bezique.games)
+                            ]
                     )
-
 
                 _ ->
                     ( model, Cmd.none )
 
+        Types.InitialSeed seed ->
+            let
+                ( beziqueSeed, seed0 ) = Random.step Random.independentSeed seed
+            in
+            (   {   state = Just
+                    {   games = 
+                        {   bezique = Bezique.init beziqueSeed
+                        ,   twoOhFourEight = ()
+                        }
+                    }
+                ,   other = "got seed!"
+                }
+            ,   Cmd.none
+            )
 
 
-updateFromFrontend : Lamdera.SessionId -> Lamdera.ClientId -> ToBackend -> Model -> ( Model, Cmd BackendMsg )
+updateFromFrontend : Lamdera.SessionId -> Lamdera.ClientId -> Types.ToBackend -> Model -> ( Model, Cmd Types.BackendMsg )
 updateFromFrontend sessionId clientId msg model =
     case msg of
-        NoOpToBackend ->
-            ( model, Cmd.none )
+        Types.GameToBackend gameMessage ->
+            Types.updateFromFrontend gameMessage model
+
+        Types.BackendForceInit ->
+            ( model, Random.generate Types.InitialSeed Random.independentSeed )
 
 -- onConnect : (SessionId -> ClientId -> backendMsg) -> Sub backendMsg
-subscriptions model = Lamdera.onConnect (\s -> \c -> OnConnection c)
+subscriptions model = Lamdera.onConnect (\s -> \c -> Types.OnConnection c)

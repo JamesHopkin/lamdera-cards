@@ -8,10 +8,12 @@ import List.Extra exposing (andThen)
 import Random
 import Random.List exposing (shuffle)
 
-regularPack = List.range 0 3
+suits = 4
+cards = 13
+regularPack = List.range 0 (suits - 1)
     |> andThen 
         (\suit -> 
-            List.range 0 12
+            List.range 0 (cards - 1)
                 |> andThen
                     (\card -> [( suit, card )])
         )

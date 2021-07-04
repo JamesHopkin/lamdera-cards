@@ -4,15 +4,21 @@ import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
 import Html
 import Html.Attributes as Attr
+import Html.Events exposing (onClick)
 import Lamdera
-import Types exposing (..)
 import Url
 
+import BasicTypes
 import Display
+import Types
+
+
+-- import games here too, or somehow wrap them in Shared?
+import Bezique
 
 
 type alias Model =
-    FrontendModel
+    Types.FrontendModel
 
 
 -- https://cards.lamdera.app
@@ -20,78 +26,68 @@ type alias Model =
 app =
     Lamdera.frontend
         { init = init
-        , onUrlChange = \_ -> Noop
-        , onUrlRequest = \_ -> Noop
+        , onUrlChange = \_ -> Types.Noop
+        , onUrlRequest = \_ -> Types.Noop
         , update = update
         , updateFromBackend = updateFromBackend
         , subscriptions = \m -> Sub.none
         , view = view
         }
 
+initGame : String -> Types.GameFrontendModel
+initGame urlStr =
+    -- assume bezique for now
+    Types.BeziqueFrontendModel Bezique.frontendInit
 
-init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
+init : Url.Url -> Nav.Key -> ( Model, Cmd Types.FrontendMsg )
 init url _ =
-    ( { gameState = NotStarted
-      , deck = []
-      , selected = -1
+    ( { game = initGame (Url.toString url)
       , debugInfo =
         { clientId = "unset!"
         , numGamesCreatedAtConnectionTime = 0
         }
-      , isAdmin = url |> Url.toString |> String.contains "admin"
       }
     , Cmd.none
     )
 
 
-update : FrontendMsg -> Model -> ( Model, Cmd FrontendMsg )
+update : Types.FrontendMsg -> Model -> ( Model, Cmd Types.FrontendMsg )
 update msg model = 
     case msg of
+        Types.GameFrontend gameMessage ->
+            Types.frontendUpdate gameMessage model 
 
-        Click index ->
-            ( { model | selected = index }, Cmd.none )
-
-        Noop ->
+        Types.Noop ->
             ( model, Cmd.none )
 
+        Types.ForceInit ->
+            ( model, Lamdera.sendToBackend Types.BackendForceInit )
 
-updateFromBackend : ToFrontend -> Model -> ( Model, Cmd FrontendMsg )
+
+updateFromBackend : Types.ToFrontend -> Model -> ( Model, Cmd Types.FrontendMsg )
 updateFromBackend msg model = 
     case msg of
-        OnGameStateChanged state deck ->
-            ( { model | gameState = state, deck = deck }, Cmd.none )
+        Types.GameToFrontend gameMsg ->
+            Types.updateFromBackend gameMsg model
 
-        InitDebugInfo info ->
-            ( { model | debugInfo = info }, Cmd.none )
+        Types.InitDebugInfo info ->
+            ( { model
+              | debugInfo = info
+              }
+            , Cmd.none
+            )
 
-view : Model -> Browser.Document FrontendMsg
+
+view : Model -> Browser.Document Types.FrontendMsg
 view model =
-    let
-      stateString = case model.gameState of
-        NotStarted -> "NotStarted"
-        MyTurn -> "MyTurn"
-        OtherTurn -> "OtherTurn"
-        Won -> "Won"
-        Lost -> "Lost"
-    in
-    { title = ""
-    , body = 
-        if model.isAdmin then
-            [ Html.text "admin!" ]
-        else
-            [ Display.drawCards model.deck model.selected Click
-            , Html.div [ Attr.style "text-align" "center", Attr.style "padding-top" "40px" ]
-                (
-                  [ Html.text (stateString ++ ", ")
-                  , Html.div [] [Html.text <| model.debugInfo.clientId ++ ", " ++
-                    (String.fromInt <| List.length model.deck)  ++ ", " ++
-                    (String.fromInt model.debugInfo.numGamesCreatedAtConnectionTime)
-                    ]
-                  , Html.div [] [Html.text
-                      <| String.join " : "
-                      <| List.map (\(s, n) -> String.fromInt s ++ ", " ++ String.fromInt n) model.deck
-                    ]
-                  ]
-                )
-            ]
+    { title = "woo"
+    , body =
+        [   Html.div [] [Html.button [onClick Types.ForceInit] [Html.text "force init"]]
+        ,   case model.game of
+                Types.BeziqueFrontendModel bezique ->
+                    Bezique.view (Types.BeziqueFrontend >> Types.GameFrontend) bezique
+
+                _ ->
+                    Html.div [] [Html.text "other stuff goes here!"]
+        ]
     }
